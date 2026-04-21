@@ -1,11 +1,8 @@
 package chat;
 
-import java.io.IOException;
 import java.util.Scanner;
 
 public class Main {
-
-    public static int PORT = 134;
 
     private static final String RESET = "\u001B[0m";
     private static final String CYAN = "\u001B[36m";
@@ -13,11 +10,10 @@ public class Main {
     private static final String YELLOW = "\u001B[33m";
     private static final String RED = "\u001B[31m";
 
-    private static ServerHandler serverHandler = new ServerHandler();
-
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
 
         Scanner sc = new Scanner(System.in);
+        ChatController controller = new ChatController();
         boolean running = true;
 
         while (running) {
@@ -29,13 +25,13 @@ public class Main {
 
             switch (input) {
                 case "1":
-                    listarServidores();
+                    controller.listarServidores();
                     break;
                 case "2":
-                    criarServidor();
+                    controller.criarServidor();
                     break;
                 case "3":
-                    conectarServidor();
+                    controller.conectarServidor(sc);
                     break;
                 case "0":
                     System.out.println(RED + "Encerrando..." + RESET);
@@ -65,29 +61,6 @@ public class Main {
         menu.append(RED).append("[0]").append(RESET).append(" Sair\n");
 
         return menu.toString();
-    }
-
-    private static void listarServidores() {
-        System.out.println(CYAN + "[INFO] Listando servidores..." + RESET);
-        String[] serverList = serverHandler.getServers();
-        if (serverList != null) {
-            String serversString = String.join("\n", serverList);
-            System.out.println(serversString);
-        } else {
-            System.out.println(RED + "Não possui servidores na rede. Tente criar um!");
-        }
-    }
-
-    private static void criarServidor() throws IOException {
-        System.out.println(GREEN + "[SERVER] Iniciando servidor na porta " + PORT + RESET);
-        ChatServer serverSocket = new ChatServer();
-        serverSocket.start(PORT);
-        PORT++;
-    }
-
-    private static void conectarServidor() {
-        System.out.println(YELLOW + "[CLIENT] Conectando ao servidor..." + RESET);
-        serverHandler.connectServer();
     }
 
     private static void clearScreen() {
