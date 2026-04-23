@@ -2,6 +2,7 @@ package chat;
 
 import java.io.IOException;
 import java.util.Scanner;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ChatController {
 
@@ -78,10 +79,43 @@ public class ChatController {
     }
 
     private void iniciarChat(ChatConnection connection, Scanner sc) {
-        System.out.println(CYAN + "[CHAT] Conexão estabelecida. Base de chat pronta (sem implementação)." + RESET);
-        System.out.println("Pressione ENTER para desconectar...");
-        sc.nextLine();
+        System.out.println(CYAN + "[CHAT] Conectado. Digite mensagens; use /sair para voltar ao menu." + RESET);
 
-        // Implementar lógica do chat e mensagens
+        AtomicBoolean chatAtivo = new AtomicBoolean(true);
+
+        // readLine() bloqueia: em thread separada para não travar o teclado (envio + recepção paralelos)
+        Thread receptor = new Thread(() -> {
+            try {
+                String linha;
+                while (chatAtivo.get() && (linha = connection.readIncomingLine()) != null) {
+                    System.out.println(GREEN + "[Recebido] " + RESET + linha);
+                }
+            } catch (IOException e) {
+                if (chatAtivo.get()) {
+                    System.out.println(RED + "Erro ao receber: " + e.getMessage() + RESET);
+                }
+            }
+        }, "chat-receptor");
+        receptor.setDaemon(true);
+        receptor.start();
+
+        try {
+            while (true) {
+                String envio = sc.nextLine();
+                if ("/sair".equalsIgnoreCase(envio.trim())) {
+                    connection.sendMessage("/sair");
+                    break;
+                }
+                connection.sendMessage(envio);
+            }
+        } finally {
+            chatAtivo.set(false);
+            connection.disconnect();
+            try {
+                receptor.join(1500);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 }
