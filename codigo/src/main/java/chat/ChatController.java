@@ -1,6 +1,8 @@
 package chat;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -14,33 +16,49 @@ public class ChatController {
 
     private ServerHandler serverHandler = new ServerHandler();
     private int portCounter = 134;
+    private List<String> lastDiscoveredServers = new ArrayList<>();
 
     public void listarServidores() {
-        System.out.println(CYAN + "[INFO] Listando servidores..." + RESET);
-        String[] serverList = serverHandler.getServers();
-        if (serverList != null) {
-            String serversString = String.join("\n", serverList);
-            System.out.println(serversString);
+        System.out.println(CYAN + "[INFO] Buscando servidores na rede (aguarde até 1.5s)..." + RESET);
+        List<String> servers = serverHandler.discoverServers();
+        lastDiscoveredServers = servers;
+
+        if (!servers.isEmpty()) {
+            for (int i = 0; i < servers.size(); i++) {
+                System.out.println(GREEN + "ID: " + (i + 1) + RESET + " | Endereço: " + servers.get(i));
+            }
         } else {
-            System.out.println(RED + "Não possui servidores na rede. Tente criar um!" + RESET);
+            System.out.println(RED + "Nenhum servidor encontrado na rede. Tente criar um!" + RESET);
         }
     }
 
     public void criarServidor() {
-        System.out.println(GREEN + "[SERVER] Iniciando servidor na porta " + portCounter + RESET);
-        try {
-            int id = serverHandler.createServer(portCounter);
-            System.out.println(GREEN + "Servidor criado com sucesso! ID: " + id + RESET);
-            portCounter++;
-        } catch (IOException e) {
-            System.out.println(RED + "Erro ao criar servidor: " + e.getMessage() + RESET);
+        System.out.println(GREEN + "[SERVER] Buscando porta disponível a partir de " + portCounter + "..." + RESET);
+        boolean success = false;
+        int tentativas = 0;
+
+        while (!success && tentativas < 100) {
+            try {
+                serverHandler.createServer(portCounter);
+                System.out.println(GREEN + "Servidor criado com sucesso na porta " + portCounter + "!" + RESET);
+                portCounter++;
+                success = true;
+            } catch (IOException e) {
+                // Se der erro (ex: BindException por porta em uso), tentamos a próxima
+                portCounter++;
+                tentativas++;
+            }
+        }
+
+        if (!success) {
+            System.out.println(RED + "Não foi possível criar o servidor após várias tentativas." + RESET);
         }
     }
 
     public void conectarServidor(Scanner sc) {
         System.out.println(YELLOW + "[CLIENT] Conectando ao servidor..." + RESET);
-        System.out.print("Digite o ID do servidor local ou a porta (ou IP:porta): ");
-        String target = sc.nextLine();
+        System.out.print("Digite o ID da lista, a porta local, ou IP:porta: ");
+        String target = sc.nextLine().trim();
 
         String ip = "127.0.0.1";
         int portToConnect = -1;
@@ -52,9 +70,11 @@ public class ChatController {
                 portToConnect = Integer.parseInt(parts[1]);
             } else {
                 int idOrPort = Integer.parseInt(target);
-                int foundPort = serverHandler.getPortById(idOrPort);
-                if (foundPort != -1) {
-                    portToConnect = foundPort;
+                // Verifica se é um ID da última lista descoberta
+                if (idOrPort > 0 && idOrPort <= lastDiscoveredServers.size() && target.length() <= 2) {
+                    String[] parts = lastDiscoveredServers.get(idOrPort - 1).split(":");
+                    ip = parts[0];
+                    portToConnect = Integer.parseInt(parts[1]);
                 } else {
                     portToConnect = idOrPort;
                 }
@@ -83,7 +103,6 @@ public class ChatController {
 
         AtomicBoolean chatAtivo = new AtomicBoolean(true);
 
-        // readLine() bloqueia: em thread separada para não travar o teclado (envio + recepção paralelos)
         Thread receptor = new Thread(() -> {
             try {
                 String linha;
